@@ -1,6 +1,6 @@
 # WinFlags – Proper Flag Emoji Support for Windows Chromium Browsers
 
-**Tired of seeing boring “JP” instead of  on Windows? So was I.**
+**Tired of seeing boring “JP” instead of the flag on Windows?**
 
 WinFlags is a lightweight Chrome extension that automatically replaces flag emojis (which show as 2-letter codes on Windows) with real flag icons. Smooth, inline, accessible, and beautifully rendered – just like they should be.
 
@@ -8,8 +8,8 @@ WinFlags is a lightweight Chrome extension that automatically replaces flag emoj
 
 ## Features
 
-- Replaces broken flag emoji (like ) with real flag images
-- Adds hover tooltips with full country names (e.g. "United States")
+- Replaces broken flag emojis with real flag images
+- Adds hover tooltips with full country names (e.g. "United Kingdom")
 - Tracks how many flags have been replaced (badge + lifetime total)
 - Works on all websites, including dynamic content (e.g. React, infinite scroll)
 - No dependencies, no tracking, no-nonsense
