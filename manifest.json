@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Emoji Flag Fixer",
+  "version": "1.1",
+  "description": "Replaces broken flag emoji on Windows with real country flags.",
+  "permissions": ["storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "128": "icon.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "128": "icon.png"
+  }
+}
