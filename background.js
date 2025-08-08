@@ -1,6 +1,5 @@
 const perTabCounters = {};
 
-// When the extension is first installed
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({
     totalFlags: 0,
@@ -8,53 +7,49 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// Listen for flag replacements from content script
 chrome.runtime.onMessage.addListener((message, sender) => {
-  if (message.type === "flagsReplaced") {
-    const { replaced } = message;
-    const tabId = sender.tab.id;
+  if (message.type !== 'flagsReplaced') return;
 
-    // Keep count per tab to handle multiple passes
-    if (!perTabCounters[tabId]) {
-      perTabCounters[tabId] = {
-        total: 0,
-        savedToStorage: 0
-      };
-    }
+  const { replaced } = message;
+  const tabId = sender.tab.id;
 
-    perTabCounters[tabId].total += replaced;
+  if (!perTabCounters[tabId]) {
+    perTabCounters[tabId] = {
+      total: 0,
+      savedToStorage: 0
+    };
+  }
 
-    // Update badge
-    chrome.action.setBadgeText({
-      text: perTabCounters[tabId].total.toString(),
-      tabId
-    });
-    chrome.action.setBadgeBackgroundColor({
-      color: "#FF0000",
-      tabId
-    });
+  perTabCounters[tabId].total += replaced;
 
-    // Add only the delta to the lifetime total
-    const delta = perTabCounters[tabId].total - perTabCounters[tabId].savedToStorage;
-    if (delta > 0) {
-      chrome.storage.local.get(["totalFlags"], (data) => {
-        const updatedTotal = (data.totalFlags || 0) + delta;
-        chrome.storage.local.set({ totalFlags: updatedTotal });
-        perTabCounters[tabId].savedToStorage = perTabCounters[tabId].total;
+  chrome.action.setBadgeText({
+    text: replaced.toString(),
+    tabId
+  });
+  chrome.action.setBadgeBackgroundColor({
+    color: '#7fffd4',
+    tabId
+  });
+
+  const delta =
+    perTabCounters[tabId].total - perTabCounters[tabId].savedToStorage;
+  if (delta > 0) {
+    chrome.storage.local.get(['totalFlags'], ({ totalFlags = 0 }) => {
+      chrome.storage.local.set({
+        totalFlags: totalFlags + delta
       });
-    }
+      perTabCounters[tabId].savedToStorage = perTabCounters[tabId].total;
+    });
   }
 });
 
-// Reset per-tab counter on navigation
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.status === "loading") {
+  if (changeInfo.status === 'loading') {
     delete perTabCounters[tabId];
-    chrome.action.setBadgeText({ text: "", tabId });
+    chrome.action.setBadgeText({ text: '', tabId });
   }
 });
 
-// Clean up when tab closes
-chrome.tabs.onRemoved.addListener((tabId) => {
+chrome.tabs.onRemoved.addListener(tabId => {
   delete perTabCounters[tabId];
 });

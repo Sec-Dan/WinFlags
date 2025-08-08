@@ -1,96 +1,106 @@
-console.log("WinFlags content.js is running");
+(function(){
+  if (window.top !== window) return;
 
-// Built-in API for converting ISO country codes to full names
-const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+  const unsupportedCodes = new Set();
+  const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
 
-function getCountryCode(emoji) {
-  const codePoints = [...emoji].map(c => c.codePointAt(0));
-  if (codePoints.length !== 2) return null;
-  return codePoints.map(cp => String.fromCharCode(cp - 0x1F1E6 + 65)).join('').toLowerCase();
-}
+  function getCountryCode(emoji) {
+    const cps = [...emoji].map(c => c.codePointAt(0));
+    if (cps.length !== 2) return null;
+    return cps
+      .map(cp => String.fromCharCode(cp - 0x1F1E6 + 65))
+      .join('')
+      .toLowerCase();
+  }
 
-function replaceFlagEmojis(root = document.body) {
-  const elements = root.querySelectorAll("*:not(script):not(style)");
-  let total = 0;
-  let replaced = 0;
-
-  elements.forEach(el => {
-    for (const node of el.childNodes) {
-      if (node.nodeType === Node.TEXT_NODE) {
+  function replaceFlagEmojis(root = document.body) {
+    let total = 0, replaced = 0;
+    const els = root.querySelectorAll("*:not(script):not(style):not([data-flags-done])");
+    els.forEach(el => {
+      el.setAttribute('data-flags-done','1');
+      el.childNodes.forEach(node => {
+        if (node.nodeType !== Node.TEXT_NODE) return;
         const matches = node.textContent.match(/[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]/g);
-        if (matches) {
-          const frag = document.createDocumentFragment();
-          let lastIndex = 0;
-          let text = node.textContent;
+        if (!matches) return;
 
-          matches.forEach(match => {
-            const index = text.indexOf(match, lastIndex);
-            if (index > lastIndex) {
-              frag.appendChild(document.createTextNode(text.slice(lastIndex, index)));
-            }
+        const frag = document.createDocumentFragment();
+        let last = 0, text = node.textContent;
 
-            const code = getCountryCode(match);
-            total++;
+        matches.forEach(match => {
+          const idx = text.indexOf(match, last);
+          if (idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
 
-            if (code) {
-              const upperCode = code.toUpperCase();
-              const countryName = regionNames.of(upperCode) || upperCode;
+          total++;
+          const code = getCountryCode(match);
 
-              const img = document.createElement("img");
-              img.src = `https://flagcdn.com/24x18/${code}.png`;
-              img.alt = `${countryName} flag`;
-              img.title = countryName;
-              img.style.display = "inline";
-              img.style.verticalAlign = "middle";
-              img.style.margin = "0 2px";
-              img.style.width = "24px";
-              img.style.height = "18px";
-              img.loading = "lazy";
-              img.crossOrigin = "anonymous";
+          if (!code || unsupportedCodes.has(code)) {
+            frag.appendChild(document.createTextNode(match));
+          } else {
+            const upper = code.toUpperCase(),
+                  name  = regionNames.of(upper) || upper,
+                  img   = document.createElement('img');
 
-              img.onerror = () => {
-                const fallback = document.createTextNode(match);
-                img.replaceWith(fallback);
-              };
+            img.src             = `https://flagcdn.com/24x18/${code}.png`;
+            img.alt             = `${name} flag`;
+            img.title           = name;
+            img.width           = 24;
+            img.height          = 18;
+            img.loading         = 'lazy';
+            img.crossOrigin     = 'anonymous';
+            img.style.display       = 'inline';
+            img.style.verticalAlign = 'middle';
+            img.style.margin        = '0 2px';
 
-              frag.appendChild(img);
-              replaced++;
-            } else {
-              frag.appendChild(document.createTextNode(match));
-            }
+            img.onerror = () => {
+              unsupportedCodes.add(code);
+              img.replaceWith(document.createTextNode(match));
+            };
 
-            lastIndex = index + match.length;
-          });
+            frag.appendChild(img);
+            replaced++;
+          }
 
-          frag.appendChild(document.createTextNode(text.slice(lastIndex)));
-          el.replaceChild(frag, node);
-        }
-      }
-    }
-  });
+          last = idx + match.length;
+        });
 
-  console.log(`Found ${total} flags, replaced ${replaced}`);
-
-  if (total > 0) {
-    chrome.runtime.sendMessage({ type: "flagsReplaced", found: total, replaced });
-  }
-}
-
-// Initial run
-replaceFlagEmojis();
-
-// Watch for future DOM updates
-const observer = new MutationObserver(mutations => {
-  for (const mutation of mutations) {
-    mutation.addedNodes.forEach(node => {
-      if (node.nodeType === 1) {
-        replaceFlagEmojis(node);
-      }
+        frag.appendChild(document.createTextNode(text.slice(last)));
+        el.replaceChild(frag, node);
+      });
     });
-  }
-});
 
-observer.observe(document.body, {
-  childList: true,
-  subtree: true
-});
+    return { total, replaced };
+  }
+
+  function safeReplace() {
+    const { replaced } = replaceFlagEmojis();
+    if (replaced > 0) {
+      chrome.runtime.sendMessage({ type: 'flagsReplaced', replaced });
+    }
+  }
+
+  function debounce(fn, wait) {
+    let t = null;
+    return () => {
+      if (t) return;
+      t = setTimeout(() => { fn(); t = null; }, wait);
+    };
+  }
+
+  function init() {
+    safeReplace();
+    const obs = new MutationObserver(debounce(safeReplace, 500));
+    obs.observe(document.body, { childList: true, subtree: true });
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(function idleScan(){
+        safeReplace();
+        requestIdleCallback(idleScan, { timeout: 2000 });
+      }, { timeout: 2000 });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
